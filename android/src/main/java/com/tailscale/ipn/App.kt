@@ -34,8 +34,6 @@ import com.tailscale.ipn.ui.notifier.Notifier
 import com.tailscale.ipn.ui.viewModel.AppViewModel
 import com.tailscale.ipn.ui.viewModel.AppViewModelFactory
 import com.tailscale.ipn.util.FeatureFlags
-import com.tailscale.ipn.util.HardwareKeyStore
-import com.tailscale.ipn.util.NoSuchKeyException
 import com.tailscale.ipn.util.ShareFileHelper
 import com.tailscale.ipn.util.TSLog
 import java.io.IOException
@@ -88,7 +86,7 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
 
   override fun getPlatformDNSConfig(): String = dns.dnsConfigAsString
 
-  override fun getInstallSource(): String = AppSourceChecker.getInstallSource(this)
+  override fun getInstallSource(): String = "tailmon"
 
   override fun shouldUseGoogleDNSFallback(): Boolean = BuildConfig.USE_GOOGLE_DNS_FALLBACK
 
@@ -355,39 +353,11 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
     }
   }
 
-  private lateinit var keyStore: HardwareKeyStore
-
-  private fun getKeyStore(): HardwareKeyStore {
-    if (hardwareAttestationKeySupported()) {
-      return HardwareKeyStore()
-    } else {
-      throw UnsupportedOperationException()
-    }
-  }
-
-  override fun hardwareAttestationKeyCreate(): String {
-    return getKeyStore().createKey()
-  }
-
-  @Throws(NoSuchKeyException::class)
-  override fun hardwareAttestationKeyRelease(id: String) {
-    return getKeyStore().releaseKey(id)
-  }
-
-  @Throws(NoSuchKeyException::class)
-  override fun hardwareAttestationKeySign(id: String, data: ByteArray): ByteArray {
-    return getKeyStore().sign(id, data)
-  }
-
-  @Throws(NoSuchKeyException::class)
-  override fun hardwareAttestationKeyPublic(id: String): ByteArray {
-    return getKeyStore().public(id)
-  }
-
-  @Throws(NoSuchKeyException::class)
-  override fun hardwareAttestationKeyLoad(id: String) {
-    return getKeyStore().load(id)
-  }
+  override fun hardwareAttestationKeyCreate(): String = throw UnsupportedOperationException()
+  override fun hardwareAttestationKeyRelease(id: String) = throw UnsupportedOperationException()
+  override fun hardwareAttestationKeySign(id: String, data: ByteArray): ByteArray = throw UnsupportedOperationException()
+  override fun hardwareAttestationKeyPublic(id: String): ByteArray = throw UnsupportedOperationException()
+  override fun hardwareAttestationKeyLoad(id: String) = throw UnsupportedOperationException()
 
   override fun bindSocketToNetwork(fd: Int): Boolean {
     val net =

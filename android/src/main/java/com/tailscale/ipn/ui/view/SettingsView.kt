@@ -66,9 +66,6 @@ fun SettingsView(
           Setting.Text(R.string.permissions, onClick = settingsNav.onNavigateToPermissions)
 
           Lists.SectionDivider()
-          Setting.Text(R.string.bug_report, onClick = settingsNav.onNavigateToBugReport)
-
-          Lists.ItemDivider()
           Setting.Text(
               R.string.about_tailscale,
               subtitle = "${stringResource(id = R.string.version)} ${AppVersion.Short()}",
@@ -156,5 +153,5 @@ fun AdminTextView(onNavigateToAdminConsole: () -> Unit) {
 fun SettingsPreview() {
   val vm = SettingsViewModel()
   vm.isAdmin.set(true)
-  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}), vm)
+  SettingsView(SettingsNav({}, {}, {}, {}, {}), vm)
 }

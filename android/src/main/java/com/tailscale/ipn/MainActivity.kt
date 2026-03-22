@@ -58,7 +58,6 @@ import com.tailscale.ipn.ui.notifier.Notifier
 import com.tailscale.ipn.ui.theme.AppTheme
 import com.tailscale.ipn.ui.util.set
 import com.tailscale.ipn.ui.view.AboutView
-import com.tailscale.ipn.ui.view.BugReportView
 import com.tailscale.ipn.ui.view.HealthView
 import com.tailscale.ipn.ui.view.IntroView
 import com.tailscale.ipn.ui.view.LoginWithAuthKeyView
@@ -241,7 +240,6 @@ class MainActivity : ComponentActivity() {
                           })
                   val settingsNav =
                       SettingsNav(
-                          onNavigateToBugReport = { navController.navigate("bugReport") },
                           onNavigateToAbout = { navController.navigate("about") },
                           onNavigateToUserSwitcher = { navController.navigate("userSwitcher") },
                           onNavigateToPermissions = { navController.navigate("permissions") },
@@ -283,7 +281,6 @@ class MainActivity : ComponentActivity() {
                             it.arguments?.getString("nodeId") ?: "",
                             PingViewModel())
                       }
-                  composable("bugReport") { BugReportView(backTo("settings")) }
                   composable("about") { AboutView(backTo("settings")) }
                   composable("userSwitcher") { UserSwitcherView(userSwitcherNav) }
                   composable("permissions") {

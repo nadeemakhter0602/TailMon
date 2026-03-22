@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.theme.AppTheme
 import com.tailscale.ipn.ui.util.set
-import com.tailscale.ipn.ui.util.universalFit
 import com.tailscale.ipn.ui.view.TaildropView
 import com.tailscale.ipn.util.TSLog
 import kotlin.random.Random
@@ -38,10 +37,8 @@ class ShareActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     setContent {
       AppTheme {
-        Surface(color = MaterialTheme.colorScheme.inverseSurface) { // Background for the letterbox
-          Surface(modifier = Modifier.universalFit()) {
-            TaildropView(requestedTransfers, (application as App).applicationScope)
-          }
+        Surface {
+          TaildropView(requestedTransfers, (application as App).applicationScope)
         }
       }
     }

@@ -56,9 +56,7 @@ import androidx.navigation.navArgument
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.notifier.Notifier
 import com.tailscale.ipn.ui.theme.AppTheme
-import com.tailscale.ipn.ui.util.AndroidTVUtil
 import com.tailscale.ipn.ui.util.set
-import com.tailscale.ipn.ui.util.universalFit
 import com.tailscale.ipn.ui.view.AboutView
 import com.tailscale.ipn.ui.view.BugReportView
 import com.tailscale.ipn.ui.view.HealthView
@@ -199,7 +197,7 @@ class MainActivity : ComponentActivity() {
 
       AppTheme {
         Surface(color = MaterialTheme.colorScheme.inverseSurface) { // Background for the letterbox
-          Surface(modifier = Modifier.universalFit()) { // Letterbox for AndroidTV
+          Surface {
             NavHost(
                 navController = navController,
                 startDestination = "main",

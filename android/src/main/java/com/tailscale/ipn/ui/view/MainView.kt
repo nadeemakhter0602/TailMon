@@ -96,7 +96,6 @@ import com.tailscale.ipn.ui.theme.short
 import com.tailscale.ipn.ui.theme.surfaceContainerListItem
 import com.tailscale.ipn.ui.theme.warningButton
 import com.tailscale.ipn.ui.theme.warningListItem
-import com.tailscale.ipn.ui.util.AndroidTVUtil.isAndroidTV
 import com.tailscale.ipn.ui.util.AutoResizingText
 import com.tailscale.ipn.ui.util.Lists
 import com.tailscale.ipn.ui.util.LoadingIndicator
@@ -141,8 +140,7 @@ fun MainView(
             val netmap by viewModel.netmap.collectAsState(initial = null)
             val showKeyExpiry by viewModel.showExpiry.collectAsState(initial = false)
 
-            // Hide the header only on Android TV when the user needs to login
-            val hideHeader = (isAndroidTV() && state == Ipn.State.NeedsLogin)
+            val hideHeader = false
             ListItem(
                 colors = MaterialTheme.colorScheme.surfaceContainerListItem,
                 leadingContent = {
@@ -379,11 +377,10 @@ fun PeerList(
     if (enableSearch && FeatureFlags.isEnabled("enable_new_search")) {
       Search(onSearchBarClick)
     } else {
-      if (!isAndroidTV()) {
-        Box(
-            modifier =
-                Modifier.fillMaxWidth().background(color = MaterialTheme.colorScheme.surface)) {
-              OutlinedTextField(
+      Box(
+          modifier =
+              Modifier.fillMaxWidth().background(color = MaterialTheme.colorScheme.surface)) {
+            OutlinedTextField(
                   modifier =
                       Modifier.fillMaxWidth()
                           .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 0.dp)
@@ -418,8 +415,7 @@ fun PeerList(
                   },
                   value = searchTermStr,
                   onValueChange = { onSearch(it) })
-            }
-      }
+          }
     }
     // Peers display
     LazyColumn(
@@ -451,11 +447,7 @@ fun PeerList(
               item(key = "user_divider_${peerSet.user?.ID ?: 0L}") { Lists.ItemDivider() }
             }
             first = false
-            if (isAndroidTV()) {
-              item { NodesSectionHeader(peerSet = peerSet) }
-            } else {
-              stickyHeader { NodesSectionHeader(peerSet = peerSet) }
-            }
+            stickyHeader { NodesSectionHeader(peerSet = peerSet) }
             itemsWithDividers(peerSet.peers, key = { it.StableID }) { peer ->
               ListItem(
                   modifier =
@@ -525,7 +517,7 @@ fun NodesSectionHeader(peerSet: PeerSet) {
   Lists.LargeTitle(
       peerSet.user?.DisplayName ?: stringResource(id = R.string.unknown_user),
       bottomPadding = 8.dp,
-      focusable = isAndroidTV(),
+      focusable = false,
       style = MaterialTheme.typography.titleLarge,
       fontWeight = FontWeight.SemiBold)
 }

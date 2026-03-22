@@ -32,7 +32,6 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import com.tailscale.ipn.R
 import com.tailscale.ipn.ui.model.IpnLocal
-import com.tailscale.ipn.ui.util.AndroidTVUtil
 import com.tailscale.ipn.ui.util.conditional
 
 @OptIn(ExperimentalCoilApi::class)
@@ -51,12 +50,7 @@ fun Avatar(
   Box(
       contentAlignment = Alignment.Center,
       modifier =
-          Modifier.conditional(AndroidTVUtil.isAndroidTV(), { padding(4.dp) })
-              .conditional(
-                  AndroidTVUtil.isAndroidTV() && isFocusable,
-                  {
-                    size((size * 1.5f).dp) // Focusable area is larger than the avatar
-                  })
+          Modifier
               .clip(CircleShape) // Ensure both the focus and click area are circular
               .background(
                   if (isFocused.value) MaterialTheme.colorScheme.surface else Color.Transparent,
@@ -79,10 +73,7 @@ fun Avatar(
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = stringResource(R.string.settings_title),
-                    modifier =
-                        Modifier.conditional(
-                                AndroidTVUtil.isAndroidTV(), { size((size * 0.8f).dp) })
-                            .clip(CircleShape) // Icon size slightly smaller than the Box
+                    modifier = Modifier.clip(CircleShape)
                     )
               }
 

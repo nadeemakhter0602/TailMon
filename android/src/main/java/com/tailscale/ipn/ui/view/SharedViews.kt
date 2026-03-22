@@ -38,7 +38,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tailscale.ipn.ui.theme.topAppBar
 import com.tailscale.ipn.ui.theme.ts_color_light_blue
-import com.tailscale.ipn.ui.util.AndroidTVUtil.isAndroidTV
 import com.tailscale.ipn.util.TSLog
 
 typealias BackNavigation = () -> Unit
@@ -56,16 +55,6 @@ fun Header(
     onBack: (() -> Unit)? = null
 ) {
   val focusRequester = remember { FocusRequester() }
-
-  if (isAndroidTV()) {
-    LaunchedEffect(focusRequester) {
-      try {
-        focusRequester.requestFocus()
-      } catch (e: Exception) {
-        TSLog.d(TAG, "Focus request failed")
-      }
-    }
-  }
 
   TopAppBar(
       title = {
@@ -85,18 +74,7 @@ fun Header(
 fun BackArrow(action: () -> Unit, focusRequester: FocusRequester) {
   val isFocused = remember { mutableStateOf(false) }
 
-  val boxModifier =
-      if (isAndroidTV()) {
-        Modifier.focusRequester(focusRequester)
-            .clip(CircleShape) // Ensure both the focus and click area are circular
-            .background(
-                if (isFocused.value) MaterialTheme.colorScheme.surface else Color.Transparent,
-            )
-            .onFocusChanged { focusState -> isFocused.value = focusState.isFocused }
-            .focusable()
-      } else {
-        Modifier
-      }
+  val boxModifier = Modifier
 
   val iconModifier =
       Modifier.clickable(

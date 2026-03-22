@@ -494,18 +494,8 @@ open class UninitializedApp : Application() {
     // the VPN (i.e. we're logged in and machine is authorized).
     private const val ABLE_TO_START_VPN_KEY = "ableToStartVPN"
 
-    // The value is 'disallowedApps' as it used to represent
-    // only disallowed applications. This has been changed
-    // and allowing/disallowing is based on ALLOW_SELECTED_APPS_KEY
-    //
-    // The value is kept the same to not reset everyone's configuration
-    private const val SELECTED_APPS_KEY = "disallowedApps"
-    private const val ALLOW_SELECTED_APPS_KEY = "allowSelectedApps"
-
     // File for shared preferences that are not encrypted.
     private const val UNENCRYPTED_PREFERENCES = "unencrypted"
-    // Key for the userspace networking mode preference.
-    private const val USERSPACE_MODE_KEY = "useUserspaceMode"
     private lateinit var appInstance: UninitializedApp
     lateinit var notificationManager: NotificationManagerCompat
 
@@ -544,68 +534,15 @@ open class UninitializedApp : Application() {
     return getSharedPreferences(UNENCRYPTED_PREFERENCES, MODE_PRIVATE)
   }
 
-  /**
-   * Starts IPNService as a foreground service without creating a VPN tunnel. This prevents Android
-   * from freezing the process and restricting network access during interactive login while the
-   * user completes auth in the browser.
-   */
   fun startForegroundForLogin() {
     val intent =
-        Intent(this, IPNService::class.java).apply {
-          action = IPNService.ACTION_START_FOREGROUND_ONLY
+        Intent(this, UserspaceService::class.java).apply {
+          action = UserspaceService.ACTION_START
         }
     try {
       startForegroundService(intent)
     } catch (e: Exception) {
       TSLog.e(TAG, "startForegroundForLogin hit exception: $e")
-    }
-  }
-
-  fun startVPN() {
-    val intent = Intent(this, IPNService::class.java).apply { action = IPNService.ACTION_START_VPN }
-    // FLAG_UPDATE_CURRENT ensures that if the intent is already pending, the existing intent will
-    // be updated rather than creating multiple redundant instances.
-    val pendingIntent =
-        PendingIntent.getForegroundService(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE // FLAG_IMMUTABLE for Android 12+
-            )
-    try {
-      pendingIntent.send()
-    } catch (foregroundServiceStartException: IllegalStateException) {
-      TSLog.e(
-          TAG,
-          "startVPN hit ForegroundServiceStartNotAllowedException: $foregroundServiceStartException")
-    } catch (securityException: SecurityException) {
-      TSLog.e(TAG, "startVPN hit SecurityException: $securityException")
-    } catch (e: Exception) {
-      TSLog.e(TAG, "startVPN hit exception: $e")
-    }
-  }
-
-  fun stopVPN() {
-    val intent = Intent(this, IPNService::class.java).apply { action = IPNService.ACTION_STOP_VPN }
-    try {
-      startService(intent)
-    } catch (illegalStateException: IllegalStateException) {
-      TSLog.e(TAG, "stopVPN hit IllegalStateException in startService(): $illegalStateException")
-    } catch (e: Exception) {
-      TSLog.e(TAG, "stopVPN hit exception in startService(): $e")
-    }
-  }
-
-  fun restartVPN() {
-    val intent =
-        Intent(this, IPNService::class.java).apply { action = IPNService.ACTION_RESTART_VPN }
-    try {
-      startService(intent)
-    } catch (illegalStateException: IllegalStateException) {
-      TSLog.e(TAG, "restartVPN hit IllegalStateException in startService(): $illegalStateException")
-    } catch (e: Exception) {
-      TSLog.e(TAG, "restartVPN hit exception in startService(): $e")
     }
   }
 
@@ -629,14 +566,6 @@ open class UninitializedApp : Application() {
     } catch (e: Exception) {
       TSLog.e(TAG, "stopUserspaceVPN hit exception: $e")
     }
-  }
-
-  fun isUserspaceMode(): Boolean {
-    return getUnencryptedPrefs().getBoolean(USERSPACE_MODE_KEY, false)
-  }
-
-  fun setUserspaceMode(enabled: Boolean) {
-    getUnencryptedPrefs().edit().putBoolean(USERSPACE_MODE_KEY, enabled).apply()
   }
 
   fun createNotificationChannel(id: String, name: String, description: String, importance: Int) {
@@ -715,63 +644,11 @@ open class UninitializedApp : Application() {
     return builder.build()
   }
 
-  fun updateUserSelectedPackages(packageNames: List<String>) {
-    if (packageNames.any { it.isEmpty() }) {
-      TSLog.e(TAG, "updateUserSelectedPackage called with empty packageName(s)")
-      return
-    }
-
-    getUnencryptedPrefs().edit().putStringSet(SELECTED_APPS_KEY, packageNames.toSet()).apply()
-
-    this.restartVPN()
-  }
-
-  fun switchUserSelectedPackages() {
-    getUnencryptedPrefs()
-        .edit()
-        .putBoolean(ALLOW_SELECTED_APPS_KEY, !allowSelectedPackages())
-        .apply()
-    getUnencryptedPrefs().edit().putStringSet(SELECTED_APPS_KEY, setOf()).apply()
-
-    this.restartVPN()
-  }
-
-  fun selectedPackageNames(): List<String> {
-    return getUnencryptedPrefs().getStringSet(SELECTED_APPS_KEY, emptySet())?.toList()
-        ?: emptyList()
-  }
-
-  fun allowSelectedPackages(): Boolean {
-    return getUnencryptedPrefs().getBoolean(ALLOW_SELECTED_APPS_KEY, false)
-  }
-
   fun getAppScopedViewModel(): AppViewModel {
     return appViewModel
   }
 
   val builtInDisallowedPackageNames: List<String> =
       listOf(
-          // RCS/Jibe https://github.com/tailscale/tailscale/issues/2322
-          "com.google.android.apps.messaging",
-          // Android Auto https://github.com/tailscale/tailscale/issues/3828
-          "com.google.android.projection.gearhead",
-          // GoPro https://github.com/tailscale/tailscale/issues/2554
-          "com.gopro.smarty",
-          // Sonos https://github.com/tailscale/tailscale/issues/2548
-          "com.sonos.acr",
-          "com.sonos.acr2",
-          // Google Chromecast https://github.com/tailscale/tailscale/issues/3636
-          "com.google.android.apps.chromecast.app",
-          // Voicemail https://github.com/tailscale/tailscale/issues/13199
-          "com.samsung.attvvm",
-          "com.att.mobile.android.vvm",
-          "com.tmobile.vvm.application",
-          "com.metropcs.service.vvm",
-          "com.mizmowireless.vvm",
-          "com.vna.service.vvm",
-          "com.dish.vvm",
-          "com.comcast.modesto.vvm.client",
-          // Android Connectivity Service https://github.com/tailscale/tailscale/issues/14128
-          "com.google.android.apps.scone",
       )
 }

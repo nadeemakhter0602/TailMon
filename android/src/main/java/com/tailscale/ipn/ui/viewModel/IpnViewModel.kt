@@ -32,9 +32,6 @@ open class IpnViewModel : ViewModel() {
   val loggedInUser: StateFlow<IpnLocal.LoginProfile?> = MutableStateFlow(null)
   val loginProfiles: StateFlow<List<IpnLocal.LoginProfile>?> = MutableStateFlow(null)
 
-  private val _vpnPrepared = MutableStateFlow(false)
-  val vpnPrepared: StateFlow<Boolean> = _vpnPrepared
-
   // The userId associated with the current node. ie: The logged in user.
   private var selfNodeUserId: UserID? = null
 

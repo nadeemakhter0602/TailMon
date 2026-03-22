@@ -13,7 +13,7 @@ public class QuickToggleService extends TileService {
     // lock protects the static fields below it.
     private static final Object lock = new Object();
 
-    // isRunning tracks whether the VPN is running.
+    // isRunning tracks whether the tailnet connection is active.
     private static boolean isRunning;
 
     // currentTile tracks getQsTile while service is listening.
@@ -65,7 +65,6 @@ public class QuickToggleService extends TileService {
         unlockAndRun(this::secureOnClick);
     }
 
-    @SuppressWarnings("deprecation")                                                                                                                    
     private void secureOnClick() {
         boolean ableToStart;
         synchronized (lock) {
@@ -79,33 +78,26 @@ public class QuickToggleService extends TileService {
         onTileClick();
     }
 
-    private void onTileClick() {                                                                                                                          
-      UninitializedApp app = UninitializedApp.get();                                                                                                    
-      boolean needsToStop;                                                                                                                            
-      synchronized (lock) {
-          needsToStop = isRunning;
-      }
-      if (needsToStop) {
-          app.stopVPN();
-      } else {
-          boolean vpnPrepared = App.get().getAppScopedViewModel().getVpnPrepared().getValue();
-          if (vpnPrepared) {
-              app.startVPN();
-          } else {
-              launchMainActivity();
-          }
-      }
+    private void onTileClick() {
+        App app = App.get();
+        boolean needsToStop;
+        synchronized (lock) {
+            needsToStop = isRunning;
+        }
+        if (needsToStop) {
+            app.stopUserspaceVPN();
+        } else {
+            app.startUserspaceVPN();
+        }
     }
 
     private void launchMainActivity() {
-      Intent i = getPackageManager().getLaunchIntentForPackage(getPackageName());
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-        // Request code for opening activity.
-          startActivityAndCollapse(PendingIntent.getActivity(this, 0, i,
-              PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-      } else {
-            // Deprecated, but still required for older versions.
-          startActivityAndCollapse(i);
-      }
-  }
+        Intent i = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startActivityAndCollapse(PendingIntent.getActivity(this, 0, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+        } else {
+            startActivityAndCollapse(i);
+        }
+    }
 }

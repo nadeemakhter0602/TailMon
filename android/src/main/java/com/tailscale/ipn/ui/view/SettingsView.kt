@@ -53,7 +53,6 @@ fun SettingsView(
   val isAdmin by viewModel.isAdmin.collectAsState()
   val managedByOrganization by viewModel.managedByOrganization.collectAsState()
   val tailnetLockEnabled by viewModel.tailNetLockEnabled.collectAsState()
-  val isVPNPrepared by appViewModel.vpnPrepared.collectAsState()
   val showTailnetLock by MDMSettings.manageTailnetLock.flow.collectAsState()
 
   Scaffold(
@@ -61,12 +60,10 @@ fun SettingsView(
         Header(titleRes = R.string.settings_title, onBack = settingsNav.onNavigateBackHome)
       }) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding).verticalScroll(rememberScrollState())) {
-          if (isVPNPrepared) {
-            UserView(
-                profile = user,
-                actionState = UserActionState.NAV,
-                onClick = settingsNav.onNavigateToUserSwitcher)
-          }
+          UserView(
+              profile = user,
+              actionState = UserActionState.NAV,
+              onClick = settingsNav.onNavigateToUserSwitcher)
 
           if (isAdmin && !isAndroidTV()) {
             Lists.ItemDivider()

@@ -41,7 +41,6 @@ import java.lang.UnsupportedOperationException
 import java.net.NetworkInterface
 import java.security.GeneralSecurityException
 import java.util.Collections
-import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -251,22 +250,7 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
   }
 
   override fun getDeviceName(): String {
-    // Try user-defined device name first
-    android.provider.Settings.Global.getString(
-            contentResolver, android.provider.Settings.Global.DEVICE_NAME)
-        ?.let {
-          return it
-        }
-
-    // Otherwise fallback to manufacturer + model
-    val manu = Build.MANUFACTURER
-    var model = Build.MODEL
-    // Strip manufacturer from model.
-    val idx = model.lowercase(Locale.getDefault()).indexOf(manu.lowercase(Locale.getDefault()))
-    if (idx != -1) {
-      model = model.substring(idx + manu.length).trim()
-    }
-    return "$manu $model"
+    return "tailnet-monitor"
   }
 
   override fun getOSVersion(): String = Build.VERSION.RELEASE

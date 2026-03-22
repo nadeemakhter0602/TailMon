@@ -4,6 +4,7 @@ package com.tailscale.ipn.ui.view
 
 import android.os.Build
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -257,8 +258,14 @@ fun StartingView() {
       modifier = Modifier.fillMaxSize(),
       verticalArrangement = Arrangement.Center,
       horizontalAlignment = Alignment.CenterHorizontally) {
-        TailscaleLogoView(
-            animated = true, usesOnBackgroundColors = false, Modifier.size(40.dp).alpha(0.3f))
+        Image(
+            painter = painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier =
+                Modifier.size(40.dp)
+                    .alpha(0.3f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1F1E1E)))
       }
 }
 
@@ -331,7 +338,13 @@ fun ConnectView(
                 fontSize = MaterialTheme.typography.titleMedium.fontSize)
           }
         } else {
-          TailscaleLogoView(modifier = Modifier.size(50.dp))
+          Image(
+              painter = painterResource(R.drawable.ic_launcher_foreground),
+              contentDescription = null,
+              modifier =
+                  Modifier.size(50.dp)
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(Color(0xFF1F1E1E)))
           Spacer(modifier = Modifier.size(1.dp))
           Text(
               text = stringResource(id = R.string.welcome_to_tailscale),

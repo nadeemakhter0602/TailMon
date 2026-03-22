@@ -98,7 +98,7 @@
     <string name="placeholder" translatable="false">--</string>
     <string name="please_login">Login required</string>
     <string name="stopped">Not connected</string>
-    <string name="connect_to_vpn">Connect to VPN</string>
+    <string name="connect_to_vpn">Connect to tailnet</string>
 
     <!-- Time conversion templates -->
     <string name="under_a_minute">under a minute</string>

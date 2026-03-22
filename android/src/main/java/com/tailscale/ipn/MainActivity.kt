@@ -66,13 +66,10 @@ import com.tailscale.ipn.ui.view.AboutView
 import com.tailscale.ipn.ui.view.BugReportView
 import com.tailscale.ipn.ui.view.HealthView
 import com.tailscale.ipn.ui.view.IntroView
-import com.tailscale.ipn.ui.view.LoginQRView
 import com.tailscale.ipn.ui.view.LoginWithAuthKeyView
 import com.tailscale.ipn.ui.view.LoginWithCustomControlURLView
-import com.tailscale.ipn.ui.view.MDMSettingsDebugView
 import com.tailscale.ipn.ui.view.MainView
 import com.tailscale.ipn.ui.view.MainViewNavigation
-import com.tailscale.ipn.ui.view.ManagedByView
 import com.tailscale.ipn.ui.view.NotificationsView
 import com.tailscale.ipn.ui.view.PeerDetails
 import com.tailscale.ipn.ui.view.PermissionsView
@@ -81,7 +78,6 @@ import com.tailscale.ipn.ui.view.SearchView
 import com.tailscale.ipn.ui.view.SettingsView
 import com.tailscale.ipn.ui.view.TaildropDirView
 import com.tailscale.ipn.ui.view.TaildropDirectoryPickerPrompt
-import com.tailscale.ipn.ui.view.TailnetLockSetupView
 import com.tailscale.ipn.ui.view.UserSwitcherNav
 import com.tailscale.ipn.ui.view.UserSwitcherView
 import com.tailscale.ipn.ui.viewModel.AppViewModel
@@ -114,11 +110,6 @@ class MainActivity : ComponentActivity() {
     return (resources.configuration.screenLayout and SCREENLAYOUT_SIZE_MASK) >=
         SCREENLAYOUT_SIZE_LARGE
   }
-  // The loginQRCode is used to track whether or not we should be rendering a QR code
-  // to the user.  This is used only on TV platforms with no browser in lieu of
-  // simply opening the URL.  This should be consumed once it has been handled.
-  private val loginQRCode: StateFlow<String?> = MutableStateFlow(null)
-
   @RequiresApi(Build.VERSION_CODES.TIRAMISU)
   @SuppressLint("SourceLockedOrientationActivity")
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -263,9 +254,6 @@ class MainActivity : ComponentActivity() {
                       SettingsNav(
                           onNavigateToBugReport = { navController.navigate("bugReport") },
                           onNavigateToAbout = { navController.navigate("about") },
-                          onNavigateToTailnetLock = { navController.navigate("tailnetLock") },
-                          onNavigateToMDMSettings = { navController.navigate("mdmSettings") },
-                          onNavigateToManagedBy = { navController.navigate("managedBy") },
                           onNavigateToUserSwitcher = { navController.navigate("userSwitcher") },
                           onNavigateToPermissions = { navController.navigate("permissions") },
                           onBackToSettings = backTo("settings"),
@@ -307,10 +295,7 @@ class MainActivity : ComponentActivity() {
                             PingViewModel())
                       }
                   composable("bugReport") { BugReportView(backTo("settings")) }
-                  composable("tailnetLock") { TailnetLockSetupView(backTo("settings")) }
                   composable("about") { AboutView(backTo("settings")) }
-                  composable("mdmSettings") { MDMSettingsDebugView(backTo("settings")) }
-                  composable("managedBy") { ManagedByView(backTo("settings")) }
                   composable("userSwitcher") { UserSwitcherView(userSwitcherNav) }
                   composable("permissions") {
                     PermissionsView(
@@ -344,9 +329,6 @@ class MainActivity : ComponentActivity() {
         }
         // Login actions are app wide.  If we are told about a browse-to-url, we should render it
         // over whatever screen we happen to be on.
-        loginQRCode.collectAsState().value?.let {
-          LoginQRView(onDismiss = { loginQRCode.set(null) })
-        }
       }
     }
   }
@@ -356,22 +338,9 @@ class MainActivity : ComponentActivity() {
     // pop up a QR code to scan
     lifecycleScope.launch {
       Notifier.browseToURL.collect { url ->
-        url?.let {
-          when (useQRCodeLogin()) {
-            false -> Dispatchers.Main.run { login(it) }
-            true -> loginQRCode.set(it)
-          }
-        }
+        url?.let { Dispatchers.Main.run { login(it) } }
       }
     }
-    // Once we see a loginFinished event, clear the QR code which will dismiss the QR dialog.
-    lifecycleScope.launch { Notifier.loginFinished.collect { _ -> loginQRCode.set(null) } }
-  }
-
-  // Returns true if we should render a QR code instead of launching a browser
-  // for login requests
-  private fun useQRCodeLogin(): Boolean {
-    return AndroidTVUtil.isAndroidTV()
   }
 
   override fun onNewIntent(intent: Intent) {

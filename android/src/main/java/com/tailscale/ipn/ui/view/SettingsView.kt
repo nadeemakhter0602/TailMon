@@ -27,13 +27,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tailscale.ipn.BuildConfig
 import com.tailscale.ipn.R
-import com.tailscale.ipn.mdm.MDMSettings
-import com.tailscale.ipn.mdm.ShowHide
 import com.tailscale.ipn.ui.Links
 import com.tailscale.ipn.ui.theme.link
 import com.tailscale.ipn.ui.theme.listItem
-import com.tailscale.ipn.ui.util.AndroidTVUtil
-import com.tailscale.ipn.ui.util.AndroidTVUtil.isAndroidTV
 import com.tailscale.ipn.ui.util.AppVersion
 import com.tailscale.ipn.ui.util.Lists
 import com.tailscale.ipn.ui.util.set
@@ -51,10 +47,6 @@ fun SettingsView(
 
   val user by viewModel.loggedInUser.collectAsState()
   val isAdmin by viewModel.isAdmin.collectAsState()
-  val managedByOrganization by viewModel.managedByOrganization.collectAsState()
-  val tailnetLockEnabled by viewModel.tailNetLockEnabled.collectAsState()
-  val showTailnetLock by MDMSettings.manageTailnetLock.flow.collectAsState()
-
   Scaffold(
       topBar = {
         Header(titleRes = R.string.settings_title, onBack = settingsNav.onNavigateBackHome)
@@ -65,32 +57,13 @@ fun SettingsView(
               actionState = UserActionState.NAV,
               onClick = settingsNav.onNavigateToUserSwitcher)
 
-          if (isAdmin && !isAndroidTV()) {
+          if (isAdmin) {
             Lists.ItemDivider()
             AdminTextView { handler.openUri(Links.ADMIN_URL) }
           }
 
-          if (showTailnetLock.value == ShowHide.Show) {
-            Lists.SectionDivider()
-            Setting.Text(
-                R.string.tailnet_lock,
-                subtitle =
-                    tailnetLockEnabled?.let {
-                      stringResource(if (it) R.string.enabled else R.string.disabled)
-                    },
-                onClick = settingsNav.onNavigateToTailnetLock)
-          }
-          if (!AndroidTVUtil.isAndroidTV()) {
-            Lists.SectionDivider()
-            Setting.Text(R.string.permissions, onClick = settingsNav.onNavigateToPermissions)
-          }
-
-          managedByOrganization.value?.let {
-            Lists.ItemDivider()
-            Setting.Text(
-                title = stringResource(R.string.managed_by_orgName, it),
-                onClick = settingsNav.onNavigateToManagedBy)
-          }
+          Lists.SectionDivider()
+          Setting.Text(R.string.permissions, onClick = settingsNav.onNavigateToPermissions)
 
           Lists.SectionDivider()
           Setting.Text(R.string.bug_report, onClick = settingsNav.onNavigateToBugReport)
@@ -100,13 +73,6 @@ fun SettingsView(
               R.string.about_tailscale,
               subtitle = "${stringResource(id = R.string.version)} ${AppVersion.Short()}",
               onClick = settingsNav.onNavigateToAbout)
-
-          // TODO: put a heading for the debug section
-          if (BuildConfig.DEBUG) {
-            Lists.SectionDivider()
-            Lists.MutedHeader(text = stringResource(R.string.internal_debug_options))
-            Setting.Text(R.string.mdm_settings, onClick = settingsNav.onNavigateToMDMSettings)
-          }
         }
       }
 }
@@ -189,8 +155,6 @@ fun AdminTextView(onNavigateToAdminConsole: () -> Unit) {
 @Composable
 fun SettingsPreview() {
   val vm = SettingsViewModel()
-  vm.tailNetLockEnabled.set(true)
   vm.isAdmin.set(true)
-  vm.managedByOrganization.set("Tails and Scales Inc.")
-  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}, {}, {}, {}), vm)
+  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}), vm)
 }

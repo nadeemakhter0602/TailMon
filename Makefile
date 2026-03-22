@@ -125,8 +125,13 @@ release-apk: jarsign-env $(RELEASE_APK)
 $(RELEASE_APK): version gradle-dependencies
 	@echo "Building release APK"
 	(cd android && ./gradlew test assembleRelease)
-	install -C ./android/build/outputs/apk/release/android-release-unsigned.apk $@
-	@jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore $(JKS_PATH) -storepass $(JKS_PASSWORD) $@ tailmon
+	@$(ANDROID_HOME)/build-tools/$(shell ls $(ANDROID_HOME)/build-tools | sort -V | tail -1)/apksigner sign \
+		--ks $(JKS_PATH) \
+		--ks-pass pass:$(JKS_PASSWORD) \
+		--ks-key-alias android-release \
+		--out $(RELEASE_APK) \
+		./android/build/outputs/apk/release/android-release-unsigned.apk
+	@echo "Signed APK ready: $(RELEASE_APK)"
 
 # Ensure that JKS_PATH and JKS_PASSWORD are set before a signed build.
 .PHONY: jarsign-env

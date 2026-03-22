@@ -156,7 +156,13 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
       Notifier.state.collect { state ->
         val ableToStartVPN = state > Ipn.State.NeedsMachineAuth
         updateConnStatus(ableToStartVPN)
-        QuickToggleService.setVPNRunning(state == Ipn.State.Starting || state == Ipn.State.Running)
+        val vpnRunning = state == Ipn.State.Starting || state == Ipn.State.Running
+        QuickToggleService.setVPNRunning(vpnRunning)
+        if (state == Ipn.State.Stopped) {
+          notifyStatus(vpnRunning = false, hideDisconnectAction = false)
+        } else if (vpnRunning) {
+          notifyStatus(vpnRunning = true, hideDisconnectAction = false)
+        }
       }
     }
     // Auto-connect on every app start

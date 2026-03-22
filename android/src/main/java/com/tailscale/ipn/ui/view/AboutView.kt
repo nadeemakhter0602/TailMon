@@ -83,6 +83,7 @@ fun AboutView(backToSettings: BackNavigation) {
               }
 
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            OpenURLButton("GitHub", Links.GITHUB_URL)
             OpenURLButton(stringResource(R.string.acknowledgements), Links.LICENSES_URL)
           }
 

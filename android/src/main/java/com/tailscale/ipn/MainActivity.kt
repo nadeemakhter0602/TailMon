@@ -8,7 +8,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
-import android.content.RestrictionsManager
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration.SCREENLAYOUT_SIZE_LARGE
@@ -54,8 +53,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.tailscale.ipn.mdm.MDMSettings
-import com.tailscale.ipn.mdm.ShowHide
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.notifier.Notifier
 import com.tailscale.ipn.ui.theme.AppTheme
@@ -121,12 +118,6 @@ class MainActivity : ComponentActivity() {
     viewModel =
         ViewModelProvider(this, MainViewModelFactory(appViewModel)).get(MainViewModel::class.java)
 
-    val rm = getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager
-    MDMSettings.update(App.get(), rm)
-    if (MDMSettings.onboardingFlow.flow.value.value == ShowHide.Hide ||
-        MDMSettings.authKey.flow.value.value != null) {
-      setIntroScreenViewed(true)
-    }
     // (jonathan) TODO: Force the app to be portrait on small screens until we have
     // proper landscape layout support
     if (!isLandscapeCapable()) {
@@ -408,16 +399,10 @@ class MainActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
-    val restrictionsManager =
-        this.getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager
-    lifecycleScope.launch(Dispatchers.IO) { MDMSettings.update(App.get(), restrictionsManager) }
   }
 
   override fun onStop() {
     super.onStop()
-    val restrictionsManager =
-        this.getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager
-    lifecycleScope.launch(Dispatchers.IO) { MDMSettings.update(App.get(), restrictionsManager) }
   }
 
   private fun openApplicationSettings() {

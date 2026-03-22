@@ -14,7 +14,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.tailscale.ipn.App
 import com.tailscale.ipn.R
-import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.model.Ipn.State
 import com.tailscale.ipn.ui.model.Tailcfg
@@ -101,13 +100,6 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
     this.pingViewModel.handleDismissal()
   }
 
-  // Returns true if we should skip all of the user-interactive permissions prompts
-  // (with the exception of the VPN permission prompt)
-  fun skipPromptsForAuthKeyLogin(): Boolean {
-    val v = MDMSettings.authKey.flow.value.value
-    return v != null && v != ""
-  }
-
   private val peerCategorizer = PeerCategorizer()
 
   init {
@@ -145,9 +137,7 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
             showExpiry.set(false)
             return@let
           } else {
-            val expiryNotificationWindowMDM = MDMSettings.keyExpirationNotice.flow.value.value
-            val window =
-                expiryNotificationWindowMDM?.let { TimeUtil.duration(it) } ?: Duration.ofHours(24)
+            val window = Duration.ofHours(24)
             val expiresSoon =
                 TimeUtil.isWithinExpiryNotificationWindow(window, it.SelfNode.KeyExpiry ?: "")
             showExpiry.set(expiresSoon)

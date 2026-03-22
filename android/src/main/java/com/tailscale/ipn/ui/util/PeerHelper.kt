@@ -4,7 +4,6 @@
 package com.tailscale.ipn.ui.util
 
 import androidx.compose.ui.util.fastAny
-import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.ui.model.Netmap
 import com.tailscale.ipn.ui.model.Tailcfg
 import com.tailscale.ipn.ui.model.UserID
@@ -21,10 +20,9 @@ class PeerCategorizer {
     val selfNode = netmap.SelfNode
     var grouped = mutableMapOf<UserID, MutableList<Tailcfg.Node>>()
 
-    val mdm = MDMSettings.hiddenNetworkDevices.flow.value.value
-    val hideMyDevices = mdm?.contains("current-user") ?: false
-    val hideOtherDevices = mdm?.contains("other-users") ?: false
-    val hideTaggedDevices = mdm?.contains("tagged-devices") ?: false
+    val hideMyDevices = false
+    val hideOtherDevices = false
+    val hideTaggedDevices = false
 
     val me = netmap.currentUserProfile()
 

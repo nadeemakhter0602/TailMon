@@ -25,8 +25,6 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.tailscale.ipn.mdm.MDMSettings
-import com.tailscale.ipn.mdm.MDMSettingsChangedReceiver
 import com.tailscale.ipn.ui.localapi.Client
 import com.tailscale.ipn.ui.localapi.Request
 import com.tailscale.ipn.ui.model.Ipn
@@ -81,7 +79,6 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
 
   val dns = DnsConfig()
   private lateinit var connectivityManager: ConnectivityManager
-  private lateinit var mdmChangeReceiver: MDMSettingsChangedReceiver
   private lateinit var app: libtailscale.Application
   override val viewModelStore: ViewModelStore
     get() = appViewModelStore
@@ -110,9 +107,6 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
     super.onCreate()
     appInstance = this
     setUnprotectedInstance(this)
-    mdmChangeReceiver = MDMSettingsChangedReceiver()
-    val filter = IntentFilter(Intent.ACTION_APPLICATION_RESTRICTIONS_CHANGED)
-    registerReceiver(mdmChangeReceiver, filter)
     createNotificationChannel(
         STATUS_CHANNEL_ID,
         getString(R.string.vpn_status),
@@ -136,7 +130,6 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
     notificationManager.cancelAll()
     applicationScope.cancel()
     viewModelStore.clear()
-    unregisterReceiver(mdmChangeReceiver)
   }
 
   @Volatile private var isInitialized = false
@@ -151,66 +144,25 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
   }
 
   private fun initializeApp() {
-    // Check if a directory URI has already been stored.
     val storedUri = getStoredDirectoryUri()
-    val rm = getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager
-    val hardwareAttestation =
-        rm.applicationRestrictions.getBoolean(MDMSettings.KEY_HARDWARE_ATTESTATION, true)
-
-    // Populate MDM settings before starting Tailscale so that the rsop
-    // policy framework reads correct values during its initial synchronous load
-    // in newPolicy(). If MDM settings are not populated, rsop caches "not configured"
-    // for Hostname and only corrects it after policyReloadMinDelay,
-    // at which point the device may have already registered with the wrong hostname.
-    MDMSettings.loadFrom(lazy { getEncryptedPrefs() }, rm)
-
     if (storedUri != null && storedUri.toString().startsWith("content://")) {
-      startLibtailscale(storedUri.toString(), hardwareAttestation)
+      startLibtailscale(storedUri.toString(), false)
     } else {
-      startLibtailscale(this.filesDir.absolutePath, hardwareAttestation)
+      startLibtailscale(this.filesDir.absolutePath, false)
     }
     healthNotifier = HealthNotifier(Notifier.health, Notifier.state, applicationScope)
     connectivityManager = this.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     NetworkChangeCallback.monitorDnsChanges(connectivityManager, dns)
     initViewModels()
     applicationScope.launch {
-      val rm = getSystemService(Context.RESTRICTIONS_SERVICE) as RestrictionsManager
-      MDMSettings.update(get(), rm)
-    }
-    applicationScope.launch {
-      Notifier.state.collect { _ ->
-        combine(Notifier.state, MDMSettings.forceEnabled.flow, Notifier.prefs, Notifier.netmap) {
-                state,
-                forceEnabled,
-                prefs,
-                netmap ->
-              Triple(state, forceEnabled, getExitNodeName(prefs, netmap))
-            }
-            .distinctUntilChanged()
-            .collect { (state, hideDisconnectAction, exitNodeName) ->
-              val ableToStartVPN = state > Ipn.State.NeedsMachineAuth
-              // If VPN is stopped, show a disconnected notification. If it is running as a
-              // foreground
-              // service, IPNService will show a connected notification.
-              if (state == Ipn.State.Stopped) {
-                notifyStatus(vpnRunning = false, hideDisconnectAction = hideDisconnectAction.value)
-              }
-              val vpnRunning = state == Ipn.State.Starting || state == Ipn.State.Running
-              updateConnStatus(ableToStartVPN)
-              QuickToggleService.setVPNRunning(vpnRunning)
-              // Update notification status when VPN is running
-              if (vpnRunning) {
-                notifyStatus(
-                    vpnRunning = true,
-                    hideDisconnectAction = hideDisconnectAction.value,
-                    exitNodeName = exitNodeName)
-              }
-            }
+      Notifier.state.collect { state ->
+        val ableToStartVPN = state > Ipn.State.NeedsMachineAuth
+        updateConnStatus(ableToStartVPN)
+        QuickToggleService.setVPNRunning(state == Ipn.State.Starting || state == Ipn.State.Running)
       }
     }
-    applicationScope.launch {
-      val hideDisconnectAction = MDMSettings.forceEnabled.flow.first()
-    }
+    // Auto-connect on every app start
+    startUserspaceVPN()
     TSLog.init(this)
     FeatureFlags.initialize(mapOf("enable_new_search" to true))
   }
@@ -373,36 +325,22 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
     return Json { encodeDefaults = true }.encodeToString(out)
   }
 
-  @Throws(
-      IOException::class, GeneralSecurityException::class, MDMSettings.NoSuchKeyException::class)
+  // No MDM policy — always report key not found to the Go backend.
+  class NoSuchKeyException : Exception()
+
+  @Throws(IOException::class, GeneralSecurityException::class, NoSuchKeyException::class)
   override fun getSyspolicyBooleanValue(key: String): Boolean {
-    return getSyspolicyStringValue(key) == "true"
+    throw NoSuchKeyException()
   }
 
-  @Throws(
-      IOException::class, GeneralSecurityException::class, MDMSettings.NoSuchKeyException::class)
+  @Throws(IOException::class, GeneralSecurityException::class, NoSuchKeyException::class)
   override fun getSyspolicyStringValue(key: String): String {
-    val setting = MDMSettings.allSettingsByKey[key]?.flow?.value
-    if (setting?.isSet != true) {
-      throw MDMSettings.NoSuchKeyException()
-    }
-    return setting.value?.toString() ?: ""
+    throw NoSuchKeyException()
   }
 
-  @Throws(
-      IOException::class, GeneralSecurityException::class, MDMSettings.NoSuchKeyException::class)
+  @Throws(IOException::class, GeneralSecurityException::class, NoSuchKeyException::class)
   override fun getSyspolicyStringArrayJSONValue(key: String): String {
-    val setting = MDMSettings.allSettingsByKey[key]?.flow?.value
-    if (setting?.isSet != true) {
-      throw MDMSettings.NoSuchKeyException()
-    }
-    try {
-      val list = setting.value as? List<*>
-      return Json.encodeToString(list)
-    } catch (e: Exception) {
-      TSLog.d("MDM", "$key value cannot be serialized to JSON. Throwing NoSuchKeyException.")
-      throw MDMSettings.NoSuchKeyException()
-    }
+    throw NoSuchKeyException()
   }
 
   fun notifyPolicyChanged() {

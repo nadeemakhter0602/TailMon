@@ -100,13 +100,6 @@
             </intent-filter>
         </receiver>
 
-        <receiver
-            android:name=".MDMSettingsChangedReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.APPLICATION_RESTRICTIONS_CHANGED" />
-            </intent-filter>
-        </receiver>
 
         <!-- UserspaceService: connects to tailnet without VPN permission.
              All traffic is handled by netstack (gVisor) within the Go process. -->
@@ -128,8 +121,5 @@
                 android:value="true" />
         </service>
 
-        <meta-data
-            android:name="android.content.APP_RESTRICTIONS"
-            android:resource="@xml/app_restrictions" />
     </application>
 </manifest>

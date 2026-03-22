@@ -76,7 +76,6 @@ import androidx.compose.ui.unit.dp
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.tailscale.ipn.App
 import com.tailscale.ipn.R
-import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.ui.Links
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.model.IpnLocal
@@ -105,7 +104,6 @@ import com.tailscale.ipn.ui.util.PeerSet
 import com.tailscale.ipn.ui.util.itemsWithDividers
 import com.tailscale.ipn.ui.util.set
 import com.tailscale.ipn.ui.viewModel.AppViewModel
-import com.tailscale.ipn.ui.viewModel.IpnViewModel.NodeState
 import com.tailscale.ipn.ui.viewModel.MainViewModel
 import com.tailscale.ipn.util.FeatureFlags
 import kotlinx.coroutines.flow.emptyFlow
@@ -141,7 +139,6 @@ fun MainView(
             val stateVal by viewModel.stateRes.collectAsState(initial = R.string.placeholder)
             val stateStr = stringResource(id = stateVal)
             val netmap by viewModel.netmap.collectAsState(initial = null)
-            val disableToggle by MDMSettings.forceEnabled.flow.collectAsState()
             val showKeyExpiry by viewModel.showExpiry.collectAsState(initial = false)
 
             // Hide the header only on Android TV when the user needs to login
@@ -152,10 +149,7 @@ fun MainView(
                   if (!hideHeader) {
                     TintedSwitch(
                         checked = isOn,
-                        enabled =
-                            !disableToggle.value &&
-                                !viewModel.isToggleInProgress
-                                    .value, // Disable switch if toggle is in progress
+                        enabled = !viewModel.isToggleInProgress.value,
                         onCheckedChange = { desiredState -> viewModel.toggleVpn(desiredState) })
                   }
                 },
@@ -566,9 +560,6 @@ fun ExpiryNotification(netmap: Netmap.NetworkMap?, action: () -> Unit = {}) {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun PromptForMissingPermissions(viewModel: MainViewModel) {
-  if (viewModel.skipPromptsForAuthKeyLogin()) {
-    return
-  }
   Permissions.prompt.forEach { (permission, state) ->
     ErrorDialog(
         title = permission.title,

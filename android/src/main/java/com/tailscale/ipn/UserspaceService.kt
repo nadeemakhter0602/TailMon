@@ -5,7 +5,6 @@ package com.tailscale.ipn
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
-import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.ui.notifier.Notifier
 import com.tailscale.ipn.util.TSLog
 
@@ -48,13 +47,9 @@ class UserspaceService : Service() {
 
     private fun showForegroundNotification() {
         try {
-            val hideDisconnectAction = MDMSettings.forceEnabled.flow.value.value
-            val exitNodeName =
-                UninitializedApp.getExitNodeName(Notifier.prefs.value, Notifier.netmap.value)
             startForeground(
                 UninitializedApp.STATUS_NOTIFICATION_ID,
-                UninitializedApp.get()
-                    .buildStatusNotification(true, hideDisconnectAction, exitNodeName))
+                UninitializedApp.get().buildStatusNotification(true, false, null))
         } catch (e: Exception) {
             TSLog.e(TAG, "Failed to start foreground notification: $e")
         }

@@ -15,6 +15,15 @@ func Start(dataDir, directFileRoot string, hwAttestationPref bool, appCtx AppCon
 	return start(dataDir, directFileRoot, hwAttestationPref, appCtx)
 }
 
+// StartUserspace starts the application in userspace networking mode.
+// In this mode no Android VPN permission is required and no kernel TUN device
+// is created. The device connects to tailnet using netstack (gVisor) entirely
+// within the Go process. Outbound connections to tailnet peers must be made
+// through the Go dialer; arbitrary Android app traffic is not routed.
+func StartUserspace(dataDir, directFileRoot string, hwAttestationPref bool, appCtx AppContext) Application {
+	return startUserspace(dataDir, directFileRoot, hwAttestationPref, appCtx)
+}
+
 // AppContext provides a context within which the Application is running. This
 // context is a hook into functionality that's implemented on the Java side.
 type AppContext interface {

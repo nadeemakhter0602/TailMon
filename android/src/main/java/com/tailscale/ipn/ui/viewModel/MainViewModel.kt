@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 package com.tailscale.ipn.ui.viewModel
 
-import android.content.Intent
 import android.net.Uri
-import android.net.VpnService
 import androidx.activity.result.ActivityResultLauncher
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,7 +30,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
@@ -49,17 +46,13 @@ class MainViewModelFactory(private val appViewModel: AppViewModel) : ViewModelPr
 @OptIn(FlowPreview::class)
 class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
   // The user readable state of the system
-  val stateRes: StateFlow<Int> = MutableStateFlow(userStringRes(State.NoState, State.NoState, true))
+  val stateRes: StateFlow<Int> = MutableStateFlow(userStringRes(State.NoState, State.NoState))
   // The expected state of the VPN toggle
   private val _vpnToggleState = MutableStateFlow(false)
   val vpnToggleState: StateFlow<Boolean> = _vpnToggleState
   // Keeps track of whether a toggle operation is in progress. This ensures that toggleVpn cannot be
   // invoked until the current operation is complete.
   var isToggleInProgress = MutableStateFlow(false)
-  // Permission to prepare VPN
-  private var vpnPermissionLauncher: ActivityResultLauncher<Intent>? = null
-  private val _requestVpnPermission = MutableStateFlow(false)
-  val requestVpnPermission: StateFlow<Boolean> = _requestVpnPermission
   // Select Taildrop directory
   private var directoryPickerLauncher: ActivityResultLauncher<Uri?>? = null
   // The list of peers
@@ -82,10 +75,6 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
   var expandedMenuPeer: StateFlow<Tailcfg.Node?> = MutableStateFlow(null)
 
   var pingViewModel: PingViewModel = PingViewModel()
-
-  val isVpnPrepared: StateFlow<Boolean> = appViewModel.vpnPrepared
-
-  val isVpnActive: StateFlow<Boolean> = appViewModel.vpnActive
 
   var searchJob: Job? = null
 
@@ -124,23 +113,12 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
   init {
     viewModelScope.launch {
       var previousState: State? = null
-      combine(Notifier.state, isVpnActive) { state, active -> state to active }
-          .collect { (currentState, active) ->
-            // Determine the correct state resource string
-            stateRes.set(userStringRes(currentState, previousState, active))
-            // Determine if the VPN toggle should be on
-            val isOn =
-                when {
-                  active && (currentState == State.Running || currentState == State.Starting) ->
-                      true
-                  previousState == State.NoState && currentState == State.Starting -> true
-                  else -> false
-                }
-            // Update the VPN toggle state
-            _vpnToggleState.value = isOn
-            // Update the previous state
-            previousState = currentState
-          }
+      Notifier.state.collect { currentState ->
+        stateRes.set(userStringRes(currentState, previousState))
+        _vpnToggleState.value =
+            currentState == State.Running || currentState == State.Starting
+        previousState = currentState
+      }
     }
     viewModelScope.launch {
       _searchTerm.debounce(250L).collect { term ->
@@ -182,43 +160,16 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
     }
   }
 
-  fun maybeRequestVpnPermission() {
-    _requestVpnPermission.value = true
-  }
-
-  fun showVPNPermissionLauncherIfUnauthorized() {
-    val vpnIntent = VpnService.prepare(App.get())
-    TSLog.d("VpnPermissions", "vpnIntent=$vpnIntent")
-    if (vpnIntent != null) {
-      vpnPermissionLauncher?.launch(vpnIntent)
-    } else {
-      appViewModel.setVpnPrepared(true)
-      startVPN()
-    }
-    _requestVpnPermission.value = false // reset
-  }
-
   fun toggleVpn(desiredState: Boolean) {
-    if (isToggleInProgress.value) {
-      // Prevent toggling while a previous toggle is in progress
-      return
-    }
-
+    if (isToggleInProgress.value) return
     viewModelScope.launch {
       isToggleInProgress.value = true
       try {
         val currentState = Notifier.state.value
-
         if (desiredState) {
-          // User wants to turn ON the VPN
-          when {
-            currentState != Ipn.State.Running -> showVPNPermissionLauncherIfUnauthorized()
-          }
+          if (currentState != Ipn.State.Running) startVPN()
         } else {
-          // User wants to turn OFF the VPN
-          if (currentState == Ipn.State.Running) {
-            stopVPN()
-          }
+          if (currentState == Ipn.State.Running || currentState == Ipn.State.Starting) stopVPN()
         }
       } finally {
         isToggleInProgress.value = false
@@ -238,23 +189,18 @@ class MainViewModel(private val appViewModel: AppViewModel) : IpnViewModel() {
     autoFocusSearch = false
   }
 
-  fun setVpnPermissionLauncher(launcher: ActivityResultLauncher<Intent>) {
-    // No intent means we're already authorized
-    vpnPermissionLauncher = launcher
-  }
 }
 
-private fun userStringRes(currentState: State?, previousState: State?, vpnActive: Boolean): Int {
+private fun userStringRes(currentState: State?, previousState: State?): Int {
   return when {
     previousState == State.NoState && currentState == State.Starting -> R.string.starting
     currentState == State.NoState -> R.string.placeholder
     currentState == State.InUseOtherUser -> R.string.placeholder
-    currentState == State.NeedsLogin ->
-        if (vpnActive) R.string.please_login else R.string.connect_to_vpn
+    currentState == State.NeedsLogin -> R.string.connect_to_vpn
     currentState == State.NeedsMachineAuth -> R.string.needs_machine_auth
     currentState == State.Stopped -> R.string.stopped
     currentState == State.Starting -> R.string.starting
-    currentState == State.Running -> if (vpnActive) R.string.connected else R.string.placeholder
+    currentState == State.Running -> R.string.connected
     else -> R.string.placeholder
   }
 }

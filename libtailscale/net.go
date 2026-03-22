@@ -181,7 +181,9 @@ func (b *backend) updateTUN(rcfg *router.Config, dcfg *dns.OSConfig) error {
 	}
 	b.logger.Logf("updateTUN: created TUN device")
 
-	b.devices.add(tunDev)
+	if mt, ok := b.devices.(*multiTUN); ok {
+		mt.add(tunDev)
+	}
 	b.logger.Logf("updateTUN: added TUN device")
 
 	b.lastCfg = rcfg
@@ -199,10 +201,12 @@ func closeFileDescriptor() error {
 	return nil
 }
 
-// CloseVPN closes any active TUN devices.
+// CloseTUNs closes any active TUN devices.
 func (b *backend) CloseTUNs() {
 	b.lastCfg = nil
-	b.devices.Shutdown()
+	if mt, ok := b.devices.(*multiTUN); ok {
+		mt.Shutdown()
+	}
 }
 
 // ifname is the interface name retrieved from LinkProperties on network change. If a network is lost, an empty string is passed in.

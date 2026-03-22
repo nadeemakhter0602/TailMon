@@ -16,6 +16,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/tailscale/wireguard-go/tun"
 	"tailscale.com/drive/driveimpl"
 	_ "tailscale.com/feature/condregister"
 	"tailscale.com/feature/taildrop"
@@ -50,6 +51,11 @@ type App struct {
 	// appCtx is a global reference to the com.tailscale.ipn.App instance.
 	appCtx AppContext
 
+	// userspaceMode, when true, connects to tailnet entirely within the Go
+	// process using netstack (gVisor). No Android VPN permission or kernel
+	// TUN device is required in this mode.
+	userspaceMode bool
+
 	store             *stateStore
 	policyStore       *syspolicyStore
 	logIDPublicAtomic atomic.Pointer[logid.PublicID]
@@ -60,7 +66,15 @@ type App struct {
 	backendMu       sync.Mutex
 }
 
+func startUserspace(dataDir, directFileRoot string, hwAttestationPref bool, appCtx AppContext) Application {
+	return startWithMode(dataDir, directFileRoot, hwAttestationPref, true, appCtx)
+}
+
 func start(dataDir, directFileRoot string, hwAttestationPref bool, appCtx AppContext) Application {
+	return startWithMode(dataDir, directFileRoot, hwAttestationPref, false, appCtx)
+}
+
+func startWithMode(dataDir, directFileRoot string, hwAttestationPref bool, userspaceMode bool, appCtx AppContext) Application {
 	defer func() {
 		if p := recover(); p != nil {
 			log.Printf("panic in Start %s: %s", p, debug.Stack())
@@ -83,15 +97,20 @@ func start(dataDir, directFileRoot string, hwAttestationPref bool, appCtx AppCon
 	if _, exists := os.LookupEnv("HOME"); !exists {
 		os.Setenv("HOME", dataDir)
 	}
+	// Point logpolicy directly at our data dir so LogsDir never falls
+	// through to os.MkdirTemp (which fails on Android when /tmp is absent).
+	if _, exists := os.LookupEnv("TS_LOGS_DIR"); !exists {
+		os.Setenv("TS_LOGS_DIR", dataDir)
+	}
 
-	return newApp(dataDir, directFileRoot, hwAttestationPref, appCtx)
+	return newApp(dataDir, directFileRoot, hwAttestationPref, userspaceMode, appCtx)
 }
 
 type backend struct {
 	engine     wgengine.Engine
 	backend    *ipnlocal.LocalBackend
 	sys        *tsd.System
-	devices    *multiTUN
+	devices    tun.Device // *multiTUN in VPN mode, *nullTUN in userspace mode
 	settings   settingsFunc
 	lastCfg    *router.Config
 	lastDNSCfg *dns.OSConfig
@@ -130,13 +149,25 @@ func (a *App) runBackend(ctx context.Context, hardwareAttestation bool) error {
 	}
 	configs := make(chan configPair)
 	configErrs := make(chan error)
-	b, err := a.newBackend(a.dataDir, a.appCtx, a.store, func(rcfg *router.Config, dcfg *dns.OSConfig) error {
-		if rcfg == nil {
+
+	var sf settingsFunc
+	if a.userspaceMode {
+		// In userspace mode there is no VPN tunnel to configure; just
+		// acknowledge config updates and record them for DNS base config.
+		sf = func(rcfg *router.Config, dcfg *dns.OSConfig) error {
 			return nil
 		}
-		configs <- configPair{rcfg, dcfg}
-		return <-configErrs
-	})
+	} else {
+		sf = func(rcfg *router.Config, dcfg *dns.OSConfig) error {
+			if rcfg == nil {
+				return nil
+			}
+			configs <- configPair{rcfg, dcfg}
+			return <-configErrs
+		}
+	}
+
+	b, err := a.newBackend(a.dataDir, a.appCtx, a.store, sf)
 	if err != nil {
 		return err
 	}
@@ -187,7 +218,7 @@ func (a *App) runBackend(ctx context.Context, hardwareAttestation bool) error {
 		select {
 		case s := <-stateCh:
 			state = s
-			if state >= ipn.Starting && vpnService.service != nil && b.isConfigNonNilAndDifferent(cfg.rcfg, cfg.dcfg) {
+			if !a.userspaceMode && state >= ipn.Starting && vpnService.service != nil && b.isConfigNonNilAndDifferent(cfg.rcfg, cfg.dcfg) {
 				// On state change, check if there are router or config changes requiring an update to VPNBuilder
 				if err := b.updateTUN(cfg.rcfg, cfg.dcfg); err != nil {
 					if errors.Is(err, errMultipleUsers) {
@@ -200,12 +231,21 @@ func (a *App) runBackend(ctx context.Context, hardwareAttestation bool) error {
 			networkMap = n
 		case c := <-configs:
 			cfg = c
+			if a.userspaceMode {
+				// No VPN tunnel to update; just acknowledge.
+				configErrs <- nil
+				break
+			}
 			if vpnService.service == nil || !b.isConfigNonNilAndDifferent(cfg.rcfg, cfg.dcfg) {
 				configErrs <- nil
 				break
 			}
 			configErrs <- b.updateTUN(cfg.rcfg, cfg.dcfg)
 		case s := <-onVPNRequested:
+			if a.userspaceMode {
+				// Userspace mode never uses the VPN service.
+				break
+			}
 			if vpnService.service != nil && vpnService.service.ID() == s.ID() {
 				// Still the same VPN instance, do nothing
 				break
@@ -252,6 +292,9 @@ func (a *App) runBackend(ctx context.Context, hardwareAttestation bool) error {
 				}
 			}
 		case s := <-onDisconnect:
+			if a.userspaceMode {
+				break
+			}
 			if vpnService.service != nil && vpnService.service.ID() == s.ID() {
 				b.CloseTUNs()
 				netns.SetAndroidProtectFunc(nil)
@@ -276,8 +319,14 @@ func (a *App) newBackend(dataDir string, appCtx AppContext, store *stateStore,
 	sys.Set(store)
 
 	logf := logger.RusagePrefixLog(log.Printf)
+	var tunDev tun.Device
+	if a.userspaceMode {
+		tunDev = newNullTUN()
+	} else {
+		tunDev = newTUNDevices()
+	}
 	b := &backend{
-		devices:  newTUNDevices(),
+		devices:  tunDev,
 		settings: settings,
 		appCtx:   appCtx,
 		bus:      sys.Bus.Get(),
@@ -335,8 +384,15 @@ func (a *App) newBackend(dataDir string, appCtx AppContext, store *stateStore,
 		return nil, fmt.Errorf("netstack.Create: %w", err)
 	}
 	sys.Set(ns)
-	ns.ProcessLocalIPs = false // let Android kernel handle it; VpnBuilder sets this up
-	ns.ProcessSubnets = true   // for Android-being-an-exit-node support
+	if a.userspaceMode {
+		// Userspace mode: netstack handles all traffic for the device's
+		// tailnet IP entirely in-process; no kernel VPN interface exists.
+		ns.ProcessLocalIPs = true
+		ns.ProcessSubnets = false
+	} else {
+		ns.ProcessLocalIPs = false // let Android kernel handle it; VpnBuilder sets this up
+		ns.ProcessSubnets = true   // for Android-being-an-exit-node support
+	}
 	sys.NetstackRouter.Set(true)
 	if w, ok := sys.Tun.GetOK(); ok {
 		w.Start()

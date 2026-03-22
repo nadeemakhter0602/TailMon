@@ -73,14 +73,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.tailscale.ipn.App
 import com.tailscale.ipn.R
 import com.tailscale.ipn.mdm.MDMSettings
-import com.tailscale.ipn.mdm.ShowHide
 import com.tailscale.ipn.ui.Links
 import com.tailscale.ipn.ui.model.Ipn
 import com.tailscale.ipn.ui.model.IpnLocal
@@ -118,7 +114,6 @@ import kotlinx.coroutines.flow.emptyFlow
 data class MainViewNavigation(
     val onNavigateToSettings: () -> Unit,
     val onNavigateToPeerDetails: (Tailcfg.Node) -> Unit,
-    val onNavigateToExitNodes: () -> Unit,
     val onNavigateToHealth: () -> Unit,
     val onNavigateToSearch: () -> Unit,
 )
@@ -139,17 +134,13 @@ fun MainView(
       Column(
           modifier = Modifier.fillMaxWidth().padding(paddingInsets),
           verticalArrangement = Arrangement.Center) {
-            // Assume VPN has been prepared for optimistic UI. Whether or not it has been prepared
-            // cannot be known
-            // until permission has been granted to prepare the VPN.
-            val isPrepared by viewModel.isVpnPrepared.collectAsState(initial = true)
+            val isPrepared = true
             val isOn by viewModel.vpnToggleState.collectAsState(initial = false)
             val state by viewModel.ipnState.collectAsState(initial = Ipn.State.NoState)
             val user by viewModel.loggedInUser.collectAsState(initial = null)
             val stateVal by viewModel.stateRes.collectAsState(initial = R.string.placeholder)
             val stateStr = stringResource(id = stateVal)
             val netmap by viewModel.netmap.collectAsState(initial = null)
-            val showExitNodePicker by MDMSettings.exitNodesPicker.flow.collectAsState()
             val disableToggle by MDMSettings.forceEnabled.flow.collectAsState()
             val showKeyExpiry by viewModel.showExpiry.collectAsState(initial = false)
 
@@ -212,16 +203,10 @@ fun MainView(
                 })
             when (state) {
               Ipn.State.Running -> {
-                viewModel.maybeRequestVpnPermission()
-                LaunchVpnPermissionIfNeeded(viewModel)
                 PromptForMissingPermissions(viewModel)
 
                 if (showKeyExpiry) {
                   ExpiryNotification(netmap = netmap, action = { viewModel.login() })
-                }
-                if (showExitNodePicker.value == ShowHide.Show) {
-                  ExitNodeStatus(
-                      navAction = navigation.onNavigateToExitNodes, viewModel = viewModel)
                 }
                 PeerList(
                     viewModel = viewModel,
@@ -234,16 +219,11 @@ fun MainView(
               else -> {
                 ConnectView(
                     state,
-                    isPrepared,
-                    // If Tailscale is stopping, don't automatically restart; wait for user to take
-                    // action (eg, if the user connected to another VPN).
-                    state != Ipn.State.Stopping,
                     user,
                     { viewModel.toggleVpn(desiredState = !isOn) },
                     { viewModel.login() },
                     loginAtUrl,
-                    netmap?.SelfNode,
-                    { viewModel.showVPNPermissionLauncherIfUnauthorized() })
+                    netmap?.SelfNode)
               }
             }
           }
@@ -270,144 +250,6 @@ fun TaildropDirectoryPickerPrompt() {
 }
 
 @Composable
-fun LaunchVpnPermissionIfNeeded(viewModel: MainViewModel) {
-  val lifecycleOwner = LocalLifecycleOwner.current
-  val shouldRequest by viewModel.requestVpnPermission.collectAsState()
-  LaunchedEffect(shouldRequest) {
-    if (!shouldRequest) return@LaunchedEffect
-    // Defer showing permission launcher until activity is resumed to avoid silent RESULT_CANCELED
-    lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-      viewModel.showVPNPermissionLauncherIfUnauthorized()
-    }
-  }
-}
-
-@Composable
-fun ExitNodeStatus(navAction: () -> Unit, viewModel: MainViewModel) {
-  val nodeState by viewModel.nodeState.collectAsState()
-  val maybePrefs by viewModel.prefs.collectAsState()
-  val netmap by viewModel.netmap.collectAsState()
-  // There's nothing to render if we haven't loaded the prefs yet
-  val prefs = maybePrefs ?: return
-  // The activeExitNode is the source of truth.  The selectedExitNode is only relevant if we
-  // don't have an active node.
-  val chosenExitNodeId = prefs.activeExitNodeID ?: prefs.selectedExitNodeID
-  val exitNodePeer = chosenExitNodeId?.let { id -> netmap?.Peers?.find { it.StableID == id } }
-  val name = exitNodePeer?.exitNodeName
-  val managedByOrganization by viewModel.managedByOrganization.collectAsState()
-  Box(
-      modifier =
-          Modifier.fillMaxWidth().background(color = MaterialTheme.colorScheme.surfaceContainer)) {
-        if (nodeState == NodeState.OFFLINE_MDM) {
-          Box(
-              modifier =
-                  Modifier.padding(start = 16.dp, end = 16.dp, top = 56.dp, bottom = 16.dp)
-                      .clip(shape = RoundedCornerShape(10.dp, 10.dp, 10.dp, 10.dp))
-                      .background(MaterialTheme.colorScheme.customErrorContainer)
-                      .fillMaxWidth()
-                      .align(Alignment.TopCenter)) {
-                Column(
-                    modifier =
-                        Modifier.padding(start = 16.dp, end = 16.dp, top = 36.dp, bottom = 16.dp)) {
-                      Text(
-                          text =
-                              managedByOrganization.value?.let {
-                                stringResource(R.string.exit_node_offline_mdm_orgname, it)
-                              } ?: stringResource(R.string.exit_node_offline_mdm),
-                          style = MaterialTheme.typography.bodyMedium,
-                          color = Color.White)
-                    }
-              }
-        }
-        Box(
-            modifier =
-                Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 16.dp)
-                    .clip(shape = RoundedCornerShape(10.dp, 10.dp, 10.dp, 10.dp))
-                    .fillMaxWidth()) {
-              ListItem(
-                  modifier = Modifier.clickable { navAction() },
-                  colors =
-                      when (nodeState) {
-                        NodeState.ACTIVE_AND_RUNNING -> MaterialTheme.colorScheme.primaryListItem
-                        NodeState.ACTIVE_NOT_RUNNING -> MaterialTheme.colorScheme.listItem
-                        NodeState.RUNNING_AS_EXIT_NODE -> MaterialTheme.colorScheme.warningListItem
-                        NodeState.OFFLINE_ENABLED -> MaterialTheme.colorScheme.errorListItem
-                        NodeState.OFFLINE_DISABLED -> MaterialTheme.colorScheme.errorListItem
-                        NodeState.OFFLINE_MDM -> MaterialTheme.colorScheme.errorListItem
-                        else ->
-                            ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surface)
-                      },
-                  overlineContent = {
-                    Text(
-                        text =
-                            if (nodeState == NodeState.OFFLINE_ENABLED ||
-                                nodeState == NodeState.OFFLINE_DISABLED ||
-                                nodeState == NodeState.OFFLINE_MDM)
-                                stringResource(R.string.exit_node_offline)
-                            else stringResource(R.string.exit_node),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                  },
-                  headlineContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                      Text(
-                          text =
-                              when (nodeState) {
-                                NodeState.NONE -> stringResource(id = R.string.none)
-                                NodeState.RUNNING_AS_EXIT_NODE ->
-                                    stringResource(id = R.string.running_exit_node)
-                                else -> name ?: ""
-                              },
-                          style = MaterialTheme.typography.bodyMedium,
-                          maxLines = 1,
-                          overflow = TextOverflow.Ellipsis)
-                      Icon(
-                          imageVector = Icons.Outlined.ArrowDropDown,
-                          contentDescription = null,
-                          tint =
-                              if (nodeState == NodeState.NONE)
-                                  MaterialTheme.colorScheme.onSurfaceVariant
-                              else MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f),
-                      )
-                    }
-                  },
-                  trailingContent = {
-                    if (nodeState != NodeState.NONE) {
-                      Button(
-                          colors =
-                              when (nodeState) {
-                                NodeState.OFFLINE_ENABLED -> MaterialTheme.colorScheme.errorButton
-                                NodeState.OFFLINE_DISABLED -> MaterialTheme.colorScheme.errorButton
-                                NodeState.OFFLINE_MDM -> MaterialTheme.colorScheme.errorButton
-                                NodeState.RUNNING_AS_EXIT_NODE ->
-                                    MaterialTheme.colorScheme.warningButton
-                                NodeState.ACTIVE_NOT_RUNNING ->
-                                    MaterialTheme.colorScheme.exitNodeToggleButton
-                                else -> MaterialTheme.colorScheme.secondaryButton
-                              },
-                          onClick = {
-                            if (nodeState == NodeState.RUNNING_AS_EXIT_NODE)
-                                viewModel.setRunningExitNode(false)
-                            else viewModel.toggleExitNode()
-                          }) {
-                            Text(
-                                when (nodeState) {
-                                  NodeState.OFFLINE_DISABLED -> stringResource(id = R.string.enable)
-                                  NodeState.ACTIVE_NOT_RUNNING ->
-                                      stringResource(id = R.string.enable)
-                                  NodeState.RUNNING_AS_EXIT_NODE ->
-                                      stringResource(id = R.string.stop)
-                                  else -> stringResource(id = R.string.disable)
-                                })
-                          }
-                    }
-                  })
-            }
-      }
-}
-
-@Composable
 fun SettingsButton(action: () -> Unit) {
   IconButton(modifier = Modifier.size(24.dp), onClick = { action() }) {
     Icon(
@@ -431,20 +273,12 @@ fun StartingView() {
 @Composable
 fun ConnectView(
     state: Ipn.State,
-    isPrepared: Boolean,
-    shouldStartAutomatically: Boolean,
     user: IpnLocal.LoginProfile?,
     connectAction: () -> Unit,
     loginAction: () -> Unit,
     loginAtUrlAction: (String) -> Unit,
     selfNode: Tailcfg.Node?,
-    showVPNPermissionLauncher: () -> Unit,
 ) {
-  LaunchedEffect(isPrepared) {
-    if (!isPrepared && shouldStartAutomatically) {
-      showVPNPermissionLauncher()
-    }
-  }
   Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
       Column(
@@ -452,24 +286,7 @@ fun ConnectView(
           verticalArrangement = Arrangement.spacedBy(8.dp, alignment = Alignment.CenterVertically),
           horizontalAlignment = Alignment.CenterHorizontally,
       ) {
-        if (!isPrepared) {
-          TailscaleLogoView(modifier = Modifier.size(50.dp))
-          Spacer(modifier = Modifier.size(1.dp))
-          Text(
-              text = stringResource(id = R.string.welcome_to_tailscale),
-              style = MaterialTheme.typography.titleMedium,
-              textAlign = TextAlign.Center)
-          Text(
-              stringResource(R.string.give_permissions),
-              style = MaterialTheme.typography.titleSmall,
-              textAlign = TextAlign.Center)
-          Spacer(modifier = Modifier.size(1.dp))
-          PrimaryActionButton(onClick = connectAction) {
-            Text(
-                text = stringResource(id = R.string.connect),
-                fontSize = MaterialTheme.typography.titleMedium.fontSize)
-          }
-        } else if (state == Ipn.State.NeedsMachineAuth) {
+        if (state == Ipn.State.NeedsMachineAuth) {
           Icon(
               modifier = Modifier.size(40.dp),
               imageVector = Icons.Outlined.Lock,
@@ -825,7 +642,6 @@ fun MainViewPreview() {
       MainViewNavigation(
           onNavigateToSettings = {},
           onNavigateToPeerDetails = {},
-          onNavigateToExitNodes = {},
           onNavigateToHealth = {},
           onNavigateToSearch = {}),
       vm,

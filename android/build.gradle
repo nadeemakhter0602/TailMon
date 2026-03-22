@@ -35,9 +35,10 @@ android {
     ndkVersion "23.1.7779620"
     compileSdkVersion 34
     defaultConfig {
+        applicationId "com.tailscale.ipn.dev"
         minSdkVersion 26
         targetSdkVersion 35
-        versionCode 468
+        versionCode 600
         versionName getVersionProperty("VERSION_LONG")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

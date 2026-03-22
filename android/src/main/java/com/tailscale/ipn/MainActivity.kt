@@ -22,8 +22,6 @@ import android.os.Process
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
@@ -66,8 +64,6 @@ import com.tailscale.ipn.ui.util.set
 import com.tailscale.ipn.ui.util.universalFit
 import com.tailscale.ipn.ui.view.AboutView
 import com.tailscale.ipn.ui.view.BugReportView
-import com.tailscale.ipn.ui.view.DNSSettingsView
-import com.tailscale.ipn.ui.view.ExitNodePicker
 import com.tailscale.ipn.ui.view.HealthView
 import com.tailscale.ipn.ui.view.IntroView
 import com.tailscale.ipn.ui.view.LoginQRView
@@ -77,25 +73,18 @@ import com.tailscale.ipn.ui.view.MDMSettingsDebugView
 import com.tailscale.ipn.ui.view.MainView
 import com.tailscale.ipn.ui.view.MainViewNavigation
 import com.tailscale.ipn.ui.view.ManagedByView
-import com.tailscale.ipn.ui.view.MullvadExitNodePicker
-import com.tailscale.ipn.ui.view.MullvadExitNodePickerList
-import com.tailscale.ipn.ui.view.MullvadInfoView
 import com.tailscale.ipn.ui.view.NotificationsView
 import com.tailscale.ipn.ui.view.PeerDetails
 import com.tailscale.ipn.ui.view.PermissionsView
 import com.tailscale.ipn.ui.view.PrimaryActionButton
-import com.tailscale.ipn.ui.view.RunExitNodeView
 import com.tailscale.ipn.ui.view.SearchView
 import com.tailscale.ipn.ui.view.SettingsView
-import com.tailscale.ipn.ui.view.SplitTunnelAppPickerView
-import com.tailscale.ipn.ui.view.SubnetRoutingView
 import com.tailscale.ipn.ui.view.TaildropDirView
 import com.tailscale.ipn.ui.view.TaildropDirectoryPickerPrompt
 import com.tailscale.ipn.ui.view.TailnetLockSetupView
 import com.tailscale.ipn.ui.view.UserSwitcherNav
 import com.tailscale.ipn.ui.view.UserSwitcherView
 import com.tailscale.ipn.ui.viewModel.AppViewModel
-import com.tailscale.ipn.ui.viewModel.ExitNodePickerNav
 import com.tailscale.ipn.ui.viewModel.MainViewModel
 import com.tailscale.ipn.ui.viewModel.MainViewModelFactory
 import com.tailscale.ipn.ui.viewModel.PermissionsViewModel
@@ -111,7 +100,6 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
   private lateinit var navController: NavHostController
-  private lateinit var vpnPermissionLauncher: ActivityResultLauncher<Intent>
   private lateinit var appViewModel: AppViewModel
   private lateinit var viewModel: MainViewModel
 
@@ -154,32 +142,6 @@ class MainActivity : ComponentActivity() {
       requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
     installSplashScreen()
-    vpnPermissionLauncher =
-        registerForActivityResult(VpnPermissionContract()) { granted ->
-          if (granted) {
-            TSLog.d("VpnPermission", "VPN permission granted")
-            appViewModel.setVpnPrepared(true)
-            App.get().startVPN()
-          } else {
-            if (isAnotherVpnActive(this)) {
-              TSLog.d("VpnPermission", "Another VPN is likely active")
-              showOtherVPNConflictDialog()
-            } else {
-              TSLog.d("VpnPermission", "Permission was denied by the user")
-              appViewModel.setVpnPrepared(false)
-
-              AlertDialog.Builder(this)
-                  .setTitle(R.string.vpn_permission_needed)
-                  .setMessage(R.string.vpn_explainer)
-                  .setPositiveButton(R.string.try_again) { _, _ ->
-                    viewModel.showVPNPermissionLauncherIfUnauthorized()
-                  }
-                  .setNegativeButton(R.string.cancel, null)
-                  .show()
-            }
-          }
-        }
-    viewModel.setVpnPermissionLauncher(vpnPermissionLauncher)
     val directoryPickerLauncher =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri: Uri? ->
           if (uri != null) {
@@ -292,7 +254,6 @@ class MainActivity : ComponentActivity() {
                           onNavigateToPeerDetails = {
                             navController.navigate("peerDetails/${it.StableID}")
                           },
-                          onNavigateToExitNodes = { navController.navigate("exitNodes") },
                           onNavigateToHealth = { navController.navigate("health") },
                           onNavigateToSearch = {
                             viewModel.enableSearchAutoFocus()
@@ -302,27 +263,13 @@ class MainActivity : ComponentActivity() {
                       SettingsNav(
                           onNavigateToBugReport = { navController.navigate("bugReport") },
                           onNavigateToAbout = { navController.navigate("about") },
-                          onNavigateToDNSSettings = { navController.navigate("dnsSettings") },
-                          onNavigateToSplitTunneling = { navController.navigate("splitTunneling") },
                           onNavigateToTailnetLock = { navController.navigate("tailnetLock") },
-                          onNavigateToSubnetRouting = { navController.navigate("subnetRouting") },
                           onNavigateToMDMSettings = { navController.navigate("mdmSettings") },
                           onNavigateToManagedBy = { navController.navigate("managedBy") },
                           onNavigateToUserSwitcher = { navController.navigate("userSwitcher") },
                           onNavigateToPermissions = { navController.navigate("permissions") },
                           onBackToSettings = backTo("settings"),
                           onNavigateBackHome = backTo("main"))
-                  val exitNodePickerNav =
-                      ExitNodePickerNav(
-                          onNavigateBackHome = {
-                            navController.popBackStack(route = "main", inclusive = false)
-                          },
-                          onNavigateBackToExitNodes = backTo("exitNodes"),
-                          onNavigateToMullvad = { navController.navigate("mullvad") },
-                          onNavigateToMullvadInfo = { navController.navigate("mullvad_info") },
-                          onNavigateBackToMullvad = backTo("mullvad"),
-                          onNavigateToMullvadCountry = { navController.navigate("mullvad/$it") },
-                          onNavigateToRunAsExitNode = { navController.navigate("runExitNode") })
                   val userSwitcherNav =
                       UserSwitcherNav(
                           backToSettings = backTo("settings"),
@@ -350,18 +297,7 @@ class MainActivity : ComponentActivity() {
                   composable("settings") {
                     SettingsView(settingsNav = settingsNav, appViewModel = appViewModel)
                   }
-                  composable("exitNodes") { ExitNodePicker(exitNodePickerNav) }
                   composable("health") { HealthView(backTo("main")) }
-                  composable("mullvad") { MullvadExitNodePickerList(exitNodePickerNav) }
-                  composable("mullvad_info") { MullvadInfoView(exitNodePickerNav) }
-                  composable(
-                      "mullvad/{countryCode}",
-                      arguments =
-                          listOf(navArgument("countryCode") { type = NavType.StringType })) {
-                        MullvadExitNodePicker(
-                            it.arguments!!.getString("countryCode")!!, exitNodePickerNav)
-                      }
-                  composable("runExitNode") { RunExitNodeView(exitNodePickerNav) }
                   composable(
                       "peerDetails/{nodeId}",
                       arguments = listOf(navArgument("nodeId") { type = NavType.StringType })) {
@@ -371,10 +307,7 @@ class MainActivity : ComponentActivity() {
                             PingViewModel())
                       }
                   composable("bugReport") { BugReportView(backTo("settings")) }
-                  composable("dnsSettings") { DNSSettingsView(backTo("settings")) }
-                  composable("splitTunneling") { SplitTunnelAppPickerView(backTo("settings")) }
                   composable("tailnetLock") { TailnetLockSetupView(backTo("settings")) }
-                  composable("subnetRouting") { SubnetRoutingView(backTo("settings")) }
                   composable("about") { AboutView(backTo("settings")) }
                   composable("mdmSettings") { MDMSettingsDebugView(backTo("settings")) }
                   composable("managedBy") { ManagedByView(backTo("settings")) }
@@ -435,32 +368,6 @@ class MainActivity : ComponentActivity() {
     lifecycleScope.launch { Notifier.loginFinished.collect { _ -> loginQRCode.set(null) } }
   }
 
-  private fun showOtherVPNConflictDialog() {
-    AlertDialog.Builder(this)
-        .setTitle(R.string.vpn_permission_denied)
-        .setMessage(R.string.multiple_vpn_explainer)
-        .setPositiveButton(R.string.go_to_settings) { _, _ ->
-          // Intent to open the VPN settings
-          val intent = Intent(Settings.ACTION_VPN_SETTINGS)
-          startActivity(intent)
-        }
-        .setNegativeButton(R.string.cancel, null)
-        .show()
-  }
-
-  fun isAnotherVpnActive(context: Context): Boolean {
-    val connectivityManager =
-        context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-    val activeNetwork = connectivityManager.activeNetwork
-    if (activeNetwork != null) {
-      val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
-      if (networkCapabilities != null &&
-          networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-        return true
-      }
-    }
-    return false
-  }
   // Returns true if we should render a QR code instead of launching a browser
   // for login requests
   private fun useQRCodeLogin(): Boolean {
@@ -562,15 +469,5 @@ class MainActivity : ComponentActivity() {
         .edit()
         .putBoolean("seen", seen)
         .apply()
-  }
-}
-
-class VpnPermissionContract : ActivityResultContract<Intent, Boolean>() {
-  override fun createIntent(context: Context, input: Intent): Intent {
-    return input
-  }
-
-  override fun parseResult(resultCode: Int, intent: Intent?): Boolean {
-    return resultCode == Activity.RESULT_OK
   }
 }

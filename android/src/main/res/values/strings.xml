@@ -8,7 +8,7 @@
     <string name="connect">Connect</string>
     <string name="disconnect">Disconnect</string>
     <string name="unknown_user">Unknown user</string>
-    <string name="connected">Connected</string>
+    <string name="connected">Connected to tailnet</string>
     <string name="using_exit_node">Using exit node (%s)</string>
     <string name="not_connected">Not connected</string>
     <string name="empty" translatable="false"> </string>
@@ -30,7 +30,7 @@
     <string name="cancel">Cancel</string>
 
     <!-- Strings for the about screen -->
-    <string name="app_name" translatable="false">Tailscale</string>
+    <string name="app_name" translatable="false">Tailscale Dev</string>
     <string name="tile_name" translatable="false">Tailscale</string>
     <string name="version">Version</string>
     <string name="about_view_header">About Tailscale</string>

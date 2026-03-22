@@ -27,7 +27,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tailscale.ipn.BuildConfig
 import com.tailscale.ipn.R
-import com.tailscale.ipn.mdm.AlwaysNeverUserDecides
 import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.mdm.ShowHide
 import com.tailscale.ipn.ui.Links
@@ -54,10 +53,8 @@ fun SettingsView(
   val isAdmin by viewModel.isAdmin.collectAsState()
   val managedByOrganization by viewModel.managedByOrganization.collectAsState()
   val tailnetLockEnabled by viewModel.tailNetLockEnabled.collectAsState()
-  val corpDNSEnabled by viewModel.corpDNSEnabled.collectAsState()
   val isVPNPrepared by appViewModel.vpnPrepared.collectAsState()
   val showTailnetLock by MDMSettings.manageTailnetLock.flow.collectAsState()
-  val useTailscaleSubnets by MDMSettings.useTailscaleSubnets.flow.collectAsState()
 
   Scaffold(
       topBar = {
@@ -76,24 +73,8 @@ fun SettingsView(
             AdminTextView { handler.openUri(Links.ADMIN_URL) }
           }
 
-          Lists.SectionDivider()
-          Setting.Text(
-              R.string.dns_settings,
-              subtitle =
-                  corpDNSEnabled?.let {
-                    stringResource(
-                        if (it) R.string.using_tailscale_dns else R.string.not_using_tailscale_dns)
-                  },
-              onClick = settingsNav.onNavigateToDNSSettings)
-
-          Lists.ItemDivider()
-          Setting.Text(
-              R.string.split_tunneling,
-              subtitle = stringResource(R.string.filter_apps_allowed_to_access_tailscale),
-              onClick = settingsNav.onNavigateToSplitTunneling)
-
           if (showTailnetLock.value == ShowHide.Show) {
-            Lists.ItemDivider()
+            Lists.SectionDivider()
             Setting.Text(
                 R.string.tailnet_lock,
                 subtitle =
@@ -102,12 +83,8 @@ fun SettingsView(
                     },
                 onClick = settingsNav.onNavigateToTailnetLock)
           }
-          if (useTailscaleSubnets.value == AlwaysNeverUserDecides.UserDecides) {
-            Lists.ItemDivider()
-            Setting.Text(R.string.subnet_routing, onClick = settingsNav.onNavigateToSubnetRouting)
-          }
           if (!AndroidTVUtil.isAndroidTV()) {
-            Lists.ItemDivider()
+            Lists.SectionDivider()
             Setting.Text(R.string.permissions, onClick = settingsNav.onNavigateToPermissions)
           }
 
@@ -215,9 +192,8 @@ fun AdminTextView(onNavigateToAdminConsole: () -> Unit) {
 @Composable
 fun SettingsPreview() {
   val vm = SettingsViewModel()
-  vm.corpDNSEnabled.set(true)
   vm.tailNetLockEnabled.set(true)
   vm.isAdmin.set(true)
   vm.managedByOrganization.set("Tails and Scales Inc.")
-  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}), vm)
+  SettingsView(SettingsNav({}, {}, {}, {}, {}, {}, {}, {}, {}), vm)
 }

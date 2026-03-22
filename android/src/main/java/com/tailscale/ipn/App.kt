@@ -219,7 +219,8 @@ class App : UninitializedApp(), libtailscale.AppContext, ViewModelStoreOwner {
    * Tailscale because directFileRoot must be set before LocalBackend starts being used.
    */
   fun startLibtailscale(directFileRoot: String, hardwareAttestation: Boolean) {
-    app = Libtailscale.start(this.filesDir.absolutePath, directFileRoot, hardwareAttestation, this)
+    app = Libtailscale.startUserspace(
+        this.filesDir.absolutePath, directFileRoot, hardwareAttestation, this)
     ShareFileHelper.init(this, app, directFileRoot, applicationScope)
     Request.setApp(app)
     Notifier.setApp(app)
@@ -503,6 +504,8 @@ open class UninitializedApp : Application() {
 
     // File for shared preferences that are not encrypted.
     private const val UNENCRYPTED_PREFERENCES = "unencrypted"
+    // Key for the userspace networking mode preference.
+    private const val USERSPACE_MODE_KEY = "useUserspaceMode"
     private lateinit var appInstance: UninitializedApp
     lateinit var notificationManager: NotificationManagerCompat
 
@@ -604,6 +607,36 @@ open class UninitializedApp : Application() {
     } catch (e: Exception) {
       TSLog.e(TAG, "restartVPN hit exception in startService(): $e")
     }
+  }
+
+  fun startUserspaceVPN() {
+    val intent =
+        Intent(this, UserspaceService::class.java).apply {
+          action = UserspaceService.ACTION_START
+        }
+    try {
+      startForegroundService(intent)
+    } catch (e: Exception) {
+      TSLog.e(TAG, "startUserspaceVPN hit exception: $e")
+    }
+  }
+
+  fun stopUserspaceVPN() {
+    val intent =
+        Intent(this, UserspaceService::class.java).apply { action = UserspaceService.ACTION_STOP }
+    try {
+      startService(intent)
+    } catch (e: Exception) {
+      TSLog.e(TAG, "stopUserspaceVPN hit exception: $e")
+    }
+  }
+
+  fun isUserspaceMode(): Boolean {
+    return getUnencryptedPrefs().getBoolean(USERSPACE_MODE_KEY, false)
+  }
+
+  fun setUserspaceMode(enabled: Boolean) {
+    getUnencryptedPrefs().edit().putBoolean(USERSPACE_MODE_KEY, enabled).apply()
   }
 
   fun createNotificationChannel(id: String, name: String, description: String, importance: Int) {

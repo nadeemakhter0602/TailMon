@@ -117,6 +117,12 @@
                 <action android:name="android.net.VpnService" />
             </intent-filter>
         </service>
+        <!-- UserspaceService: connects to tailnet without VPN permission.
+             All traffic is handled by netstack (gVisor) within the Go process. -->
+        <service
+            android:name=".UserspaceService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted" />
         <service
             android:name=".QuickToggleService"
             android:exported="true"

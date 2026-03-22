@@ -5,7 +5,7 @@ package com.tailscale.ipn.ui.viewModel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tailscale.ipn.UninitializedApp
+import com.tailscale.ipn.App
 import com.tailscale.ipn.mdm.MDMSettings
 import com.tailscale.ipn.ui.localapi.Client
 import com.tailscale.ipn.ui.model.Ipn
@@ -136,11 +136,11 @@ open class IpnViewModel : ViewModel() {
 
   // VPN Control
   fun startVPN() {
-    UninitializedApp.get().startVPN()
+    App.get().startUserspaceVPN()
   }
 
   fun stopVPN() {
-    UninitializedApp.get().stopVPN()
+    App.get().stopUserspaceVPN()
   }
 
   // Login/Logout
@@ -167,7 +167,7 @@ open class IpnViewModel : ViewModel() {
     // does not freeze the process or cut network access while the user is in the browser
     // completing auth. The foreground service transitions to a full VPN service later when
     // startVPN() is called after the backend reaches Running state.
-    UninitializedApp.get().startForegroundForLogin()
+    App.get().startForegroundForLogin()
     val client = Client(viewModelScope)
 
     val finalMaskedPrefs = maskedPrefs?.deepCopy() ?: Ipn.MaskedPrefs()
